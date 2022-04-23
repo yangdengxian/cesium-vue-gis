@@ -53,8 +53,8 @@
         data() {
             return {
                 id: "map",
-                featuresUrl: './data/test.geojson',
-                // featuresUrl: './data/china_border.geojson',
+                // featuresUrl: './data/test.geojson',
+                featuresUrl: './data/china.geojson',
             }
         },
         props: {
@@ -176,24 +176,22 @@
                 const self = this;
                 
                 const styles = function (feature,res) {
-                    
+                    let {offsetGeo,geo} = cutAngleLine(feature,self.map,4);
                     return [
                         new Style({
                             stroke: new Stroke({
                                 color: '#4B7110',
                                 width: 1,
                             }),
+                            geometry: geo,
                         }),
-                        new Style({
+                        /* new Style({
                             stroke: new Stroke({
                                 color: '#4B7110',
                                 width: 1,
                             }),
-                            geometry: function (feature) {
-                                let geo = cutAngleLine(feature,self.map,4);
-                                return geo;
-                            },
-                        }),
+                            geometry: offsetGeo,
+                        }), */
                     ];
                 }
 
@@ -242,53 +240,31 @@
         if (!geometry) return;
         switch (geometry.getType()) {
             case 'LineString':
-                var coords = [];
-                coords = ol_coordinate_offsetCoords(geometry.getCoordinates(), size * res);
                 geometry.forEachSegment(function (s, e) {
-                    var l = new LineString([s, e]);
-                    chunks.push(l.getCoordinates());
-                    tanA.push((s[1] - e[1]) / (s[0] - e[0]));
+                    chunks.push([s, e]);
+                    chunksOffset.push(ol_coordinate_offsetCoords([s, e], size * res));
                 });
-                for (let j = 0; j < tanA.length - 1; j++) {
-                    //线段夹角
-                    atanA.push(Math.atan(Math.abs((tanA[j] - tanA[j + 1]) / (1 + tanA[j] * tanA[j + 1]))) * 180 / Math.PI)
+                return {
+                    offsetGeo: new LineString(chunksOffset),
+                    geo: new LineString(chunks),
                 }
-                //夹角与线段数量保持一致，最后一个默认为0
-                atanA.push(0);
-
-                var offsetLine = new LineString(coords);
-                offsetLine.forEachSegment((s,e)=>{
-                    var l = new LineString([s,e]);
-                    chunksOffset.push(l.getCoordinates());
-                })
-
-                for (let i = 0; i < chunks.length; i++) {
-                    const point = intersectionPoint(chunksOffset[i][0],chunksOffset[i][1],chunks[i][1]);
-                    chunksOffset[i][1] = point;
-                }
-                
-                return new LineString(chunksOffset);
             case 'MultiLineString':
                 var lines = geometry.getLineStrings();
                 //线段斜率和线段夹角
                 for (let j = 0; j < lines.length; j++) {
                     var singleLine = lines[j];
-                    chunks = [];
-
+                    chunks[j] = [];
+                    chunksOffset[j] = [];
                     singleLine.forEachSegment(function (s, e) {
-                        var l = new LineString([s, e]);
-                        chunks.push(l);
-                        tanA.push((s[1] - e[1]) / (s[0] - e[0]));
+                        chunks[j].push([s, e]);
+                        chunksOffset[j].push(ol_coordinate_offsetCoords([s, e], size * res));
                     })
                 }
 
-                for (let j = 0; j < tanA.length - 1; j++) {
-                    //线段夹角
-                    atanA.push(Math.atan(Math.abs((tanA[j] - tanA[j + 1]) / (1 + tanA[j] * tanA[j + 1]))) * 180 / Math.PI)
+                return {
+                    offsetGeo: new MultiLineString(chunksOffset),
+                    geo: new MultiLineString(chunks),
                 }
-                //夹角与线段数量保持一致，最后一个默认为0
-                atanA.push(0);
-                return geometry;
         }
     }
 
